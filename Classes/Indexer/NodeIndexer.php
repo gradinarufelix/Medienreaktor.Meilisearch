@@ -87,7 +87,13 @@ class NodeIndexer extends AbstractNodeIndexer
      * @param array $targetDimensionCombination Optional: Force indexing with this dimension combination (for shine-through scenarios)
      * @return void
      */
-    public function indexNode(NodeInterface $node, $targetWorkspace = null, $indexAllDimensions = true, $indexFallbackDimensions = true, array $targetDimensionCombination = []): void
+    public function indexNode(
+        NodeInterface $node,
+        $targetWorkspace = null,
+        $indexAllDimensions = true,
+        $indexFallbackDimensions = true,
+        array $targetDimensionCombination = []
+    ): void
     {
         // Make sure this is a fulltext root, e.g. Neos.Neos:Document or subtype
         $node = $this->findFulltextRoot($node);
@@ -109,8 +115,9 @@ class NodeIndexer extends AbstractNodeIndexer
         // For each dimension combination, extract the node variant properties and fulltext
         $dimensionCombinations = $this->dimensionsService->getDimensionCombinationsForIndexing($node);
         if ($indexAllDimensions && $dimensionCombinations !== []) {
-            $allIndexedVariants = $this->indexClient->findAllIdentifiersByIdentifier($nodeIdentifier);
-            $this->indexClient->deleteDocuments($allIndexedVariants);
+            $this->indexClient->deleteByFilter([
+                '__identifier = "' . $nodeIdentifier . '"'
+            ]);
             foreach ($dimensionCombinations as $combination) {
                 if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                     $documents[] = $nodeVariant;
@@ -122,8 +129,10 @@ class NodeIndexer extends AbstractNodeIndexer
                 // Check if current dimension and all dimensions that fall back to the current nodes dimensions
                 if (in_array($node->getContext()->getDimensions()['language'][0], $combination['language'])) {
                     // delete previously indexed variant with same dimensions
-                    $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $this->dimensionsService->hash($combination));
-                    $this->indexClient->deleteDocuments($indexedVariant);
+                    $dimensionsHash = $this->dimensionsService->hash($combination);
+                    $this->indexClient->deleteDocuments([
+                        $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
+                    ]);
                     // Index the new node variant
                     if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $combination)) {
                         $documents[] = $nodeVariant;
@@ -134,12 +143,13 @@ class NodeIndexer extends AbstractNodeIndexer
             // Index only the current dimension combination without any fallbacks
             // Use targetDimensionCombination if provided (for shine-through/fallback scenarios)
             $effectiveDimensions = $targetDimensionCombination !== [] ? $targetDimensionCombination : [];
-            $dimensionsHash = $effectiveDimensions !== [] 
-                ? $this->dimensionsService->hash($effectiveDimensions) 
+            $dimensionsHash = $effectiveDimensions !== []
+                ? $this->dimensionsService->hash($effectiveDimensions)
                 : $this->dimensionsService->hashByNode($node);
-            
-            $indexedVariant = $this->indexClient->findAllIdentifiersByIdentifierAndDimensionsHash($nodeIdentifier, $dimensionsHash);
-            $this->indexClient->deleteDocuments($indexedVariant);
+
+            $this->indexClient->deleteDocuments([
+                $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash)
+            ]);
             if ($nodeVariant = $this->extractNodeVariant($nodeIdentifier, $effectiveDimensions)) {
                 $documents[] = $nodeVariant;
             }
@@ -338,6 +348,11 @@ class NodeIndexer extends AbstractNodeIndexer
             ? $this->dimensionsService->hash($overrideDimensions)
             : $this->dimensionsService->hashByNode($node);
 
+        return $this->generateDocumentIdentifier($nodeIdentifier, $dimensionsHash);
+    }
+
+    protected function generateDocumentIdentifier(string $nodeIdentifier, string $dimensionsHash): string
+    {
         return $nodeIdentifier . '_' . $dimensionsHash;
     }
 }
