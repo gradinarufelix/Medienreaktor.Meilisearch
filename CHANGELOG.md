@@ -14,6 +14,31 @@ and above - are not part of the history below.
 
 ## [Unreleased]
 
+### Added
+
+- **`frontendFilter.excludeRules` keeps further documents out of the frontend search.**
+  Keyed rules of `attribute` and `value`, each adding `NOT <attribute> = <value>` to the
+  filter the tenant token enforces - for a site's own boolean property, or for a node type
+  through `__nodeTypeAndSupertypes`. Documents without the attribute stay searchable, so a
+  newly introduced property does not empty the search before the index is rebuilt.
+  `excludeHiddenInIndex` is unchanged, and a filter without rules is exactly what it was.
+- `nodeindex:createindex --wait` and `--timeout`, so a deployment can make sure Meilisearch
+  has applied new filterable attributes before pages render tokens that filter by them.
+
+### Changed
+
+- `createIndex()` adds every attribute the frontend filter names to the configured
+  `filterableAttributes`, after the configured entries. Meilisearch rejects a whole search
+  whose filter names an attribute it cannot filter by, and Flow merges lists position by
+  position, which makes a site's own list an unreliable place to add them. Granular
+  filterable-attribute objects are left as configured.
+- `createIndex()` registers its settings update for waiting, so `nodeindex:build --wait`
+  and `nodeindex:createindex --wait` fail when Meilisearch rejects the index settings
+  instead of reporting success.
+- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a repair
+  after the node is gone. Runtime structural repairs and scheduled reconciliation
+  use the same variant replacement and descendant traversal paths.
+
 ### Fixed
 
 - **The index is now told its primary key instead of leaving Meilisearch to infer one.**
@@ -67,12 +92,6 @@ and above - are not part of the history below.
   result, with nothing to show that the change had no effect. The new
   `frontendFilter.excludeHiddenInIndex` setting leaves the term out when set to `false`.
   It defaults to `true`, so nothing changes for a site that does not set it.
-
-### Changed
-
-- `NodeIndexer::replaceVariants()` is public, so deferred indexers can replay a repair
-  after the node is gone. Runtime structural repairs and scheduled reconciliation
-  use the same variant replacement and descendant traversal paths.
 
 ## [2.12.0] - 2026-09-11
 
