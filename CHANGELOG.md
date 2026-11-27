@@ -50,6 +50,14 @@ and above - are not part of the history below.
   `getIndexClient()` returned the proxy and violated its `IndexInterface` return type.
   The client is now injected through `injectIndexClient()`, which Flow calls eagerly.
   Flush Flow caches after updating so the proxies are rebuilt.
+- **`scheduledvisibility:reconcile` takes its targeted path from the first operation on.**
+  The reconciliation service's indexer was injected lazily, and the `DependencyProxy`
+  fails the service's `instanceof NodeIndexer` checks until its first method call. A run
+  in a fresh process therefore collected fulltext roots through the generic traversal and
+  sent its first operation through `indexNode()` or `removeNode()`, which refresh the
+  node's own and fallback combinations, instead of `replaceVariants()` for the one
+  combination that changed. The indexer is now injected eagerly, as in the runtime repair
+  service. Flush Flow caches after updating so the proxies are rebuilt.
 - **Documents of node types that cannot be hidden are no longer dropped by the frontend
   filter.** It required `_hidden = false`, but `_hidden` is only indexed for
   `Neos.Neos:Hidable`, so a type that opts out of it - typically a site's homepage - had
